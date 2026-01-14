@@ -1,0 +1,99 @@
+# VMS Invoice Reconciliation - Visual Flowchart
+
+## Complete Data Processing Pipeline
+
+```mermaid
+flowchart TD
+    %% Input Files
+    Start([Week Ending: 10/11/2025])
+    IW[("iw-shift-wo.csv<br/>1,257 rows<br/>Instawork Data")]
+    TS[("sdx-timesheet.csv<br/>714 rows<br/>Fieldglass Timesheets")]
+    INV[("sdx-invoice.csv<br/>722 rows<br/>Fieldglass Invoices")]
+
+    %% Step 1: Map
+    Step1["STEP 1: Create Mappings<br/>create_mappings.py<br/><br/>Join: Shifts with Work Orders → Timesheets → Invoices<br/>Filter NULL timesheet_id<br/>99.5% match rate"]
+
+    Mapping[("mapping-output.csv<br/>1,299 rows<br/>Complete mappings")]
+    Unmatched1["unmatched files (3)"]
+
+    %% Step 2: Pivots
+    Step2["STEP 2: Create Pivots<br/>create_pivots.py<br/><br/>Filter: total_paid > 0<br/>Group & Aggregate<br/>Net reversals"]
+
+    PivotFG[("pivot-fieldglass.csv<br/>142 rows<br/>$284,188")]
+    PivotIW[("pivot-iw.csv<br/>170 rows<br/>$292,785")]
+    Excluded["excluded_shifts (2 files)"]
+
+    %% Step 3: Template
+    Step3["STEP 3: Create Template<br/>create_payment_tracker.py<br/><br/>Use pivot-iw as base<br/>Create empty columns"]
+
+    Template[("payment-tracker.csv<br/>170 rows<br/>Template")]
+
+    %% Step 4: Reversals
+    Step4["STEP 4: Process Reversals<br/>process_reversals.py<br/><br/>Check for negatives<br/>0 found (netted in Step 2)"]
+
+    %% Step 5: Allocation
+    Step5["STEP 5: Allocate FG Amounts<br/>allocate_fieldglass_amounts.py<br/><br/>Trace: IW → Shifts → Timesheets → FG<br/>Proportional allocation<br/>Deduplicate to avoid cartesian products"]
+
+    Allocated[("payment-tracker.csv<br/>168/170 allocated<br/>FG amounts filled")]
+
+    %% Step 6: Rebates
+    Step6["STEP 6: Calculate Rebates<br/>calculate_rebates.py<br/><br/>Front End Rebate: (AP / 0.9775) × 0.0225<br/>Backend Rebate: AP × 0.0435<br/>Variance calculation"]
+
+    Final[("payment-tracker.csv<br/>FINAL<br/>All rebates calculated")]
+
+    Complete([COMPLETE<br/>Ready for Review])
+
+    %% Connections
+    Start --> IW
+    Start --> TS
+    Start --> INV
+
+    IW --> Step1
+    TS --> Step1
+    INV --> Step1
+
+    Step1 --> Mapping
+    Step1 --> Unmatched1
+
+    Mapping --> Step2
+    IW --> Step2
+    INV --> Step2
+
+    Step2 --> PivotFG
+    Step2 --> PivotIW
+    Step2 --> Excluded
+
+    PivotIW --> Step3
+    Step3 --> Template
+
+    Template --> Step4
+    PivotFG --> Step4
+
+    Step4 --> Step5
+    Mapping --> Step5
+    IW --> Step5
+    INV --> Step5
+
+    Step5 --> Allocated
+
+    Allocated --> Step6
+
+    Step6 --> Final
+
+    Final --> Complete
+
+    %% Styling
+    classDef inputFile fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    classDef process fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef output fill:#f1f8e9,stroke:#33691e,stroke-width:2px
+    classDef final fill:#c8e6c9,stroke:#1b5e20,stroke-width:3px
+    classDef warning fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+
+    class IW,TS,INV inputFile
+    class Step1,Step2,Step3,Step4,Step5,Step6 process
+    class Mapping,PivotFG,PivotIW,Template,Allocated,AllocLog output
+    class Final final
+    class Unmatched1,Excluded,HighVar warning
+```
+
+---
